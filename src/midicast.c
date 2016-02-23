@@ -1,108 +1,18 @@
-/*  =========================================================================
-    midicast - Take MIDI events from port and broadcast on Zyre MIDI group
-
-    Copyright (c) the Contributors as noted in the AUTHORS file.
-
-    This file is part of DeMidi, a distributed MIDI project.
-    https://github.com/zyreapps/demidi
-
-    This Source Code Form is subject to the terms of the Mozilla Public
-    License, v. 2.0. If a copy of the MPL was not distributed with this
-    file, You can obtain one at http://mozilla.org/MPL/2.0/.
-    =========================================================================
-*/
+//  Reads lines from stdin and sends to SMOOTH
 
 #include <zyre.h>
-#include <alsa/asoundlib.h>
 
-int main (int argc, char *argv [])
+int main (void)
 {
-    int argn = 1;
-    if (argn == argc
-    ||  streq (argv [argn], "-h") || streq (argv [argn], "--help")) {
-        puts ("midicast [-v] [-p port] [-i interface]");
-        puts ("Reads MIDI events from port and sends to Zyre MIDI group");
-        puts (" -h, --help: this help");
-        puts (" -v, --verbose: trace events as they happen");
-        puts (" -p, --port: specify port name, e.g. '-p hw:1,0,0'");
-        puts (" -c, --channel: specify channel 0-15, e.g. '-c 2'");
-        puts (" -i, --interface: specify WiFi interface, e.g. '-i wlan0'");
-        return 0;
-    }
-    char *midi_port_name = "hw:1,0,0";
-    char *wifi_interface = NULL;
-    int midi_channel = 0;
-    bool verbose = false;
-    while (argn < argc) {
-        if (streq (argv [argn], "-p") || streq (argv [argn], "--port"))
-            midi_port_name = argv [++argn];
-        else
-        if (streq (argv [argn], "-c") || streq (argv [argn], "--channel"))
-            midi_channel = atoi (argv [++argn]) & 0x0F;
-        else
-        if (streq (argv [argn], "-i") || streq (argv [argn], "--interface"))
-            wifi_interface = argv [++argn];
-        else
-        if (streq (argv [argn], "-v") || streq (argv [argn], "--verbose"))
-            verbose = true;
-        argn++;
-    }
-    snd_rawmidi_t *input;
-    int rc = snd_rawmidi_open (&input, NULL, midi_port_name, 0);
-    if (rc < 0) {
-        zsys_error ("cannot open port \"%s\": %s", midi_port_name, snd_strerror (rc));
-        return 0;
-    }
-    //  Flush any waiting input
-    zclock_sleep (100);
-    zsys_info ("casting MIDI events from %s", midi_port_name);
+    zyre_t *myself = zyre_new (NULL);
+    zyre_start (myself);
+    zyre_join (myself, "SMOOTH");
 
-    zyre_t *zyre = zyre_new (NULL);
-    if (wifi_interface)
-        zyre_set_interface (zyre, wifi_interface);
-    zyre_start (zyre);
-    zyre_join (zyre, "MIDI");
-    zsys_info ("this player is %s", zyre_name (zyre));
-
-    while (!zsys_interrupted) {
-        byte buffer [256];
-        int rc = snd_rawmidi_read (input, buffer, sizeof (buffer));
-        if (rc == -EAGAIN)
-            continue;
-        else
-        if (rc == -EINTR) {
-            printf (" interrupted\n");
+    while (true) {
+        char buffer [1024];
+        if (!fgets (buffer, 1024, stdin))
             break;
-        }
-        if (rc < 0) {
-            zsys_error ("cannot read MIDI data: %s", snd_strerror (rc));
-            break;
-        }
-        //  Set channel if it's a voice command
-        byte voice_cmd = buffer [0] & 0xF0;
-        if (voice_cmd == 0x80
-        ||  voice_cmd == 0x90
-        ||  voice_cmd == 0xA0
-        ||  voice_cmd == 0xB0
-        ||  voice_cmd == 0xC0
-        ||  voice_cmd == 0xD0
-        ||  voice_cmd == 0xE0)
-            buffer [0] += midi_channel;
-
-        //  Broadcast the MIDI event
-        zmsg_t *msg = zmsg_new ();
-        zmsg_addmem (msg, buffer, rc);
-        zyre_shout (zyre, "MIDI", &msg);
-
-        if (verbose) {
-            printf ("%d:", rc);
-            int byte_nbr;
-            for (byte_nbr = 0; byte_nbr < rc; byte_nbr++)
-                printf (" %02X", buffer [byte_nbr]);
-            printf ("\n");
-        }
+        zyre_shouts (myself, "SMOOTH", "%s", buffer);
     }
-    snd_rawmidi_close (input);
-    zyre_destroy (&zyre);
-	return 0;
+    zyre_destroy (&myself);
 }
