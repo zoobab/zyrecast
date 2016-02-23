@@ -6,13 +6,14 @@ int main (void)
 {
     zyre_t *myself = zyre_new (NULL);
     zyre_start (myself);
-    zyre_join (myself, "SMOOTH");
+    zyre_join (myself, "CHAT");
 
     while (true) {
         char buffer [1024];
         if (!fgets (buffer, 1024, stdin))
             break;
-        zyre_shouts (myself, "SMOOTH", "%s", buffer);
+        buffer [strlen (buffer) - 1] = 0;
+        zyre_shouts (myself, "CHAT", "%s", buffer);
     }
     zyre_destroy (&myself);
 }
