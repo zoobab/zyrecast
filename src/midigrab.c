@@ -16,9 +16,9 @@ int main (void)
         if (zyre_event_type (event) == ZYRE_EVENT_SHOUT) {
             if (streq (zyre_event_group (event), "SMOOTH")) {
                 zyre_event_print (event);
-		zyre_event_destroy (&event);
-		zyre_destroy (&zyre);
-		exit(EXIT_SUCCESS);
+        		zyre_event_destroy (&event);
+        		zyre_destroy (&zyre);
+        		exit(EXIT_SUCCESS);
             }
         }
 //        zyre_event_destroy (&event);
